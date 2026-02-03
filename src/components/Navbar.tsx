@@ -135,7 +135,7 @@ export default function Navbar() {
                 >
                   <span className="relative">
                     {item.icon}
-                    {item.badge > 0 && (
+                    {item.badge !== undefined && item.badge > 0 && (
                       <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
                         {item.badge > 9 ? '9+' : item.badge}
                       </span>
@@ -272,7 +272,7 @@ export default function Navbar() {
                 >
                   <span className="relative">
                     {item.icon}
-                    {item.badge > 0 && (
+                    {item.badge !== undefined && item.badge > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
                         {item.badge > 9 ? '9+' : item.badge}
                       </span>
@@ -301,7 +301,7 @@ export default function Navbar() {
             >
               <span className="relative">
                 {item.icon}
-                {item.badge > 0 && (
+                {item.badge !== undefined && item.badge > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold px-1">
                     {item.badge > 99 ? '99+' : item.badge}
                   </span>

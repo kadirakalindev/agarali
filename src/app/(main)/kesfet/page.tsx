@@ -114,7 +114,7 @@ export default function ExplorePage() {
         const mediaPosts = posts
           .filter((p) => p.post_media && p.post_media.length > 0)
           .flatMap((p) =>
-            p.post_media!.map((m) => ({
+            p.post_media!.map((m: { file_url: string; file_type: string }) => ({
               post: p,
               media: m,
             }))

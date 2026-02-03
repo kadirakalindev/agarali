@@ -30,7 +30,7 @@ interface RecentPost {
   profiles: {
     username: string;
     full_name: string;
-  };
+  } | null;
 }
 
 export default function AdminDashboard() {
@@ -81,7 +81,12 @@ export default function AdminDashboard() {
       });
 
       setRecentUsers(recentUsersData || []);
-      setRecentPosts(recentPostsData || []);
+      // Transform posts data to flatten profiles
+      const transformedPosts = (recentPostsData || []).map((post: { id: string; content: string; created_at: string; profiles: { username: string; full_name: string } | { username: string; full_name: string }[] | null }) => ({
+        ...post,
+        profiles: Array.isArray(post.profiles) ? post.profiles[0] : post.profiles
+      }));
+      setRecentPosts(transformedPosts as RecentPost[]);
       setLoading(false);
     }
 

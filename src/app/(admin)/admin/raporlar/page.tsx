@@ -109,13 +109,15 @@ export default function ReportsPage() {
 
     if (posts) {
       const postsWithCounts = await Promise.all(
-        posts.map(async (post) => {
+        posts.map(async (post: { id: string; content: string; profiles: { username: string; full_name: string } | { username: string; full_name: string }[] }) => {
           const [{ count: likeCount }, { count: commentCount }] = await Promise.all([
             supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', post.id),
             supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id),
           ]);
           return {
-            ...post,
+            id: post.id,
+            content: post.content,
+            profiles: Array.isArray(post.profiles) ? post.profiles[0] : post.profiles,
             likeCount: likeCount || 0,
             commentCount: commentCount || 0,
           };
