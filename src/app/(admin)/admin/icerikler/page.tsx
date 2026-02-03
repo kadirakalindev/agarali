@@ -9,9 +9,9 @@ import type { Post, Comment, Story, Profile } from '@/types';
 
 type ContentType = 'posts' | 'comments' | 'stories';
 
-interface ExtendedPost extends Post {
+interface ExtendedPost extends Omit<Post, 'post_media'> {
   profiles: Profile;
-  post_media?: { file_url: string; file_type: string }[];
+  post_media?: { id: string; post_id: string; file_url: string; file_type: string; created_at: string }[];
 }
 
 interface ExtendedComment extends Comment {
