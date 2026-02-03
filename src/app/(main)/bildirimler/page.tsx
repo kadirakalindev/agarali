@@ -1,0 +1,123 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import type { Notification } from '@/types';
+
+export default function NotificationsPage() {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function fetchNotifications() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      setNotifications(data || []);
+      setLoading(false);
+
+      // Mark all as read
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .eq('read', false);
+    }
+
+    fetchNotifications();
+  }, [supabase]);
+
+  const timeAgo = (date: string) => {
+    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return 'Az önce';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} dk önce`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} saat önce`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} gün önce`;
+    return new Date(date).toLocaleDateString('tr-TR');
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'like':
+        return '❤️';
+      case 'comment':
+        return '💬';
+      case 'follow':
+        return '👥';
+      case 'mention':
+        return '📢';
+      default:
+        return '🔔';
+    }
+  };
+
+  const getNotificationText = (notification: Notification) => {
+    const data = notification.data as Record<string, string>;
+    switch (notification.type) {
+      case 'like':
+        return `${data.user_name} gönderini beğendi`;
+      case 'comment':
+        return `${data.user_name} gönderine yorum yaptı`;
+      case 'follow':
+        return `${data.user_name} seni takip etmeye başladı`;
+      case 'mention':
+        return `${data.user_name} senden bahsetti`;
+      default:
+        return 'Yeni bildirim';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">🔔 Bildirimler</h1>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+        {notifications.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-gray-500">Henüz bildirim yok</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {notifications.map((notification) => (
+              <div
+                key={notification.id}
+                className={`p-4 flex items-start space-x-3 ${
+                  !notification.read ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''
+                }`}
+              >
+                <span className="text-2xl">{getNotificationIcon(notification.type)}</span>
+                <div className="flex-1">
+                  <p className="text-gray-800 dark:text-gray-200">
+                    {getNotificationText(notification)}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {timeAgo(notification.created_at)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
