@@ -113,6 +113,46 @@ CREATE POLICY "Admin lakap onaylayabilir" ON nicknames
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS nickname TEXT;
 
 -- =====================================================
+-- 7. Push Notifications Sistemi
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT,
+    auth TEXT,
+    platform TEXT DEFAULT 'web' CHECK (platform IN ('web', 'android', 'ios')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, endpoint)
+);
+
+-- Push subscriptions RLS
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- Kullanıcı kendi subscription'larını görebilir
+CREATE POLICY "Kullanıcı kendi push subscription görebilir" ON push_subscriptions
+    FOR SELECT USING (user_id = auth.uid());
+
+-- Kullanıcı kendi subscription'ını ekleyebilir
+CREATE POLICY "Kullanıcı push subscription ekleyebilir" ON push_subscriptions
+    FOR INSERT WITH CHECK (user_id = auth.uid());
+
+-- Kullanıcı kendi subscription'ını silebilir
+CREATE POLICY "Kullanıcı push subscription silebilir" ON push_subscriptions
+    FOR DELETE USING (user_id = auth.uid());
+
+-- Admin tüm subscription'ları görebilir (bildirim göndermek için)
+CREATE POLICY "Admin tüm push subscriptions görebilir" ON push_subscriptions
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- =====================================================
 -- NOTLAR:
 -- - Yeni kayıt olan kullanıcılar is_approved = false olarak başlar
 -- - Admin panelinden onaylanana kadar siteye giremezler

@@ -7,6 +7,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ConfirmModal } from '@/components/ui/Modal';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import type { Profile, Nickname } from '@/types';
 
 export default function SettingsPage() {
@@ -15,7 +16,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'account' | 'privacy'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'account' | 'notifications' | 'privacy'>('profile');
   const [successMessage, setSuccessMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -37,6 +38,9 @@ export default function SettingsPage() {
   const [nicknameRequest, setNicknameRequest] = useState<Nickname | null>(null);
   const [newNickname, setNewNickname] = useState('');
   const [nicknameLoading, setNicknameLoading] = useState(false);
+
+  // Push notification hook
+  const pushNotifications = usePushNotifications(profile?.id || null);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -334,10 +338,11 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Ayarlar</h1>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-6">
+      <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-6 overflow-x-auto">
         {[
           { id: 'profile', label: 'Profil' },
           { id: 'account', label: 'Hesap' },
+          { id: 'notifications', label: 'Bildirimler' },
           { id: 'privacy', label: 'Gizlilik' },
         ].map((tab) => (
           <button
@@ -623,6 +628,113 @@ export default function SettingsPage() {
             <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
               Hesabımı Sil
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Notifications Tab */}
+      {activeTab === 'notifications' && (
+        <div className="space-y-6">
+          {/* Push Notifications */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Anlık Bildirimler
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Yeni beğeni, yorum ve takipçi bildirimleri alın
+            </p>
+
+            {!pushNotifications.isSupported ? (
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>Tarayıcınız anlık bildirimleri desteklemiyor</span>
+                </div>
+              </div>
+            ) : pushNotifications.permission === 'denied' ? (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                  <span>Bildirim izni reddedildi. Tarayıcı ayarlarından izin verin.</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    pushNotifications.isSubscribed
+                      ? 'bg-emerald-100 dark:bg-emerald-900/30'
+                      : 'bg-gray-100 dark:bg-gray-700'
+                  }`}>
+                    <svg
+                      className={`w-6 h-6 ${
+                        pushNotifications.isSubscribed
+                          ? 'text-emerald-600'
+                          : 'text-gray-400'
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {pushNotifications.isSubscribed ? 'Bildirimler Açık' : 'Bildirimler Kapalı'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {pushNotifications.isSubscribed
+                        ? 'Yeni aktivitelerde bildirim alacaksınız'
+                        : 'Bildirimleri açarak hiçbir şeyi kaçırmayın'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant={pushNotifications.isSubscribed ? 'secondary' : 'primary'}
+                  onClick={pushNotifications.isSubscribed ? pushNotifications.unsubscribe : pushNotifications.subscribe}
+                  loading={pushNotifications.isLoading}
+                >
+                  {pushNotifications.isSubscribed ? 'Kapat' : 'Aç'}
+                </Button>
+              </div>
+            )}
+
+            {pushNotifications.error && (
+              <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 text-sm">
+                {pushNotifications.error}
+              </div>
+            )}
+          </div>
+
+          {/* Notification Types */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Bildirim Türleri
+            </h2>
+            <div className="space-y-4">
+              {[
+                { id: 'likes', label: 'Beğeniler', desc: 'Gönderileriniz beğenildiğinde' },
+                { id: 'comments', label: 'Yorumlar', desc: 'Gönderilerinize yorum yapıldığında' },
+                { id: 'follows', label: 'Takipler', desc: 'Biri sizi takip ettiğinde' },
+                { id: 'mentions', label: 'Bahsetmeler', desc: 'Bir gönderide sizden bahsedildiğinde' },
+              ].map((item) => (
+                <div key={item.id} className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">{item.label}</p>
+                    <p className="text-sm text-gray-500">{item.desc}</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" defaultChecked />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500"></div>
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
