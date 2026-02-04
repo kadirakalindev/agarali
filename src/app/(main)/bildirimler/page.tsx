@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { Notification } from '@/types';
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
@@ -66,15 +69,36 @@ export default function NotificationsPage() {
     const data = notification.data as Record<string, string>;
     switch (notification.type) {
       case 'like':
-        return `${data.user_name} gönderini beğendi`;
+        return `${data.user_name || 'Birisi'} gönderini beğendi`;
       case 'comment':
-        return `${data.user_name} gönderine yorum yaptı`;
+        return `${data.user_name || 'Birisi'} gönderine yorum yaptı`;
       case 'follow':
-        return `${data.user_name} seni takip etmeye başladı`;
+        return `${data.user_name || 'Birisi'} seni takip etmeye başladı`;
       case 'mention':
-        return `${data.user_name} senden bahsetti`;
+        return `${data.user_name || 'Birisi'} senden bahsetti`;
       default:
         return 'Yeni bildirim';
+    }
+  };
+
+  const getNotificationUrl = (notification: Notification): string | null => {
+    const data = notification.data as Record<string, string>;
+    switch (notification.type) {
+      case 'like':
+      case 'comment':
+      case 'mention':
+        return data.post_id ? `/gonderi/${data.post_id}` : null;
+      case 'follow':
+        return data.user_username ? `/profil/${data.user_username}` : null;
+      default:
+        return null;
+    }
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    const url = getNotificationUrl(notification);
+    if (url) {
+      router.push(url);
     }
   };
 
@@ -97,24 +121,40 @@ export default function NotificationsPage() {
           </div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            {notifications.map((notification) => (
-              <div
-                key={notification.id}
-                className={`p-4 flex items-start space-x-3 ${
-                  !notification.read ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''
-                }`}
-              >
-                <span className="text-2xl">{getNotificationIcon(notification.type)}</span>
-                <div className="flex-1">
-                  <p className="text-gray-800 dark:text-gray-200">
-                    {getNotificationText(notification)}
-                  </p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {timeAgo(notification.created_at)}
-                  </p>
+            {notifications.map((notification) => {
+              const url = getNotificationUrl(notification);
+              const data = notification.data as Record<string, string>;
+
+              return (
+                <div
+                  key={notification.id}
+                  onClick={() => handleNotificationClick(notification)}
+                  className={`p-4 flex items-start space-x-3 transition-colors ${
+                    !notification.read ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''
+                  } ${url ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50' : ''}`}
+                >
+                  <span className="text-2xl">{getNotificationIcon(notification.type)}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-800 dark:text-gray-200">
+                      {getNotificationText(notification)}
+                    </p>
+                    {notification.type === 'comment' && data.comment_preview && (
+                      <p className="text-sm text-gray-500 mt-1 truncate">
+                        "{data.comment_preview}"
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-500 mt-1">
+                      {timeAgo(notification.created_at)}
+                    </p>
+                  </div>
+                  {url && (
+                    <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
