@@ -34,29 +34,38 @@ export default function FeedPage() {
   const supabase = useMemo(() => createClient(), []);
 
   const fetchPosts = useCallback(async (offset = 0) => {
+    // Optimized query: only fetch counts, not full arrays
     const { data, error } = await supabase
       .from('posts')
       .select(`
         *,
-        profiles(*),
-        post_media(*),
-        likes(*),
-        comments(*, profiles(*))
+        profiles!inner(id, username, full_name, avatar_url, nickname),
+        post_media(id, file_url, file_type),
+        likes(user_id),
+        comments(count)
       `)
       .order('created_at', { ascending: false })
       .range(offset, offset + 9);
 
     if (!error && data) {
+      // Transform data to include counts
+      const transformedData = data.map(post => ({
+        ...post,
+        like_count: post.likes?.length || 0,
+        comment_count: post.comments?.[0]?.count || 0,
+        user_has_liked: post.likes?.some((l: { user_id: string }) => l.user_id === profile?.id) || false,
+      }));
+
       if (offset === 0) {
-        setPosts(data);
+        setPosts(transformedData);
       } else {
-        setPosts((prev) => [...prev, ...data]);
+        setPosts((prev) => [...prev, ...transformedData]);
       }
       setHasMore(data.length === 10);
     }
     setLoading(false);
     setLoadingMore(false);
-  }, [supabase]);
+  }, [supabase, profile?.id]);
 
   const fetchSidebar = useCallback(async (userId: string) => {
     const now = new Date().toISOString();
@@ -214,21 +223,29 @@ export default function FeedPage() {
     };
   }, [supabase, fetchPosts, fetchSidebar]);
 
-  // Infinite scroll
+  // Infinite scroll with throttle
   useEffect(() => {
+    let ticking = false;
+
     const handleScroll = () => {
-      if (
-        window.innerHeight + document.documentElement.scrollTop >=
-        document.documentElement.offsetHeight - 500
-      ) {
-        if (!loadingMore && hasMore && !loading) {
-          setLoadingMore(true);
-          fetchPosts(posts.length);
+      if (ticking) return;
+
+      ticking = true;
+      requestAnimationFrame(() => {
+        if (
+          window.innerHeight + document.documentElement.scrollTop >=
+          document.documentElement.offsetHeight - 500
+        ) {
+          if (!loadingMore && hasMore && !loading) {
+            setLoadingMore(true);
+            fetchPosts(posts.length);
+          }
         }
-      }
+        ticking = false;
+      });
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [loadingMore, hasMore, loading, posts.length, fetchPosts]);
 
@@ -399,6 +416,7 @@ export default function FeedPage() {
                   <PostCard
                     post={post}
                     currentUserId={profile?.id}
+                    currentUserProfile={profile}
                     onDelete={handlePostDeleted}
                   />
                 </div>

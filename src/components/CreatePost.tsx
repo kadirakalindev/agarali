@@ -1,10 +1,18 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Avatar } from './ui/Avatar';
 import { Button } from './ui/Button';
 import type { Profile } from '@/types';
+
+// Mention için sadece gerekli alanları içeren tip
+interface MentionUser {
+  id: string;
+  username: string;
+  full_name: string;
+  avatar_url: string | null;
+}
 
 interface CreatePostProps {
   profile: Profile;
@@ -18,11 +26,12 @@ export default function CreatePost({ profile, onPostCreated }: CreatePostProps) 
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [mentionSearch, setMentionSearch] = useState('');
-  const [mentionResults, setMentionResults] = useState<Profile[]>([]);
+  const [mentionResults, setMentionResults] = useState<MentionUser[]>([]);
   const [showMentions, setShowMentions] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const supabase = createClient();
+  const mentionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
@@ -67,19 +76,26 @@ export default function CreatePost({ profile, onPostCreated }: CreatePostProps) 
     addFiles(droppedFiles);
   };
 
-  const handleMentionSearch = async (searchText: string) => {
+  // Debounced mention search
+  const handleMentionSearch = useCallback((searchText: string) => {
+    if (mentionTimeoutRef.current) {
+      clearTimeout(mentionTimeoutRef.current);
+    }
+
     if (searchText.length > 0) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .ilike('username', `${searchText}%`)
-        .limit(5);
-      setMentionResults(data || []);
-      setShowMentions(true);
+      mentionTimeoutRef.current = setTimeout(async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, username, full_name, avatar_url')
+          .ilike('username', `${searchText}%`)
+          .limit(5);
+        setMentionResults((data as MentionUser[]) || []);
+        setShowMentions(true);
+      }, 300); // 300ms debounce
     } else {
       setShowMentions(false);
     }
-  };
+  }, [supabase]);
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;

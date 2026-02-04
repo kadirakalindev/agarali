@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Avatar } from './ui/Avatar';
@@ -9,14 +9,27 @@ import { ConfirmModal } from './ui/Modal';
 import { sendLikeNotification, sendCommentNotification } from '@/lib/send-push-notification';
 import type { Post, Profile, Comment } from '@/types';
 
+// Mention için sadece gerekli alanları içeren tip
+interface MentionUser {
+  id: string;
+  username: string;
+  full_name: string;
+  avatar_url: string | null;
+}
+
 interface CommentWithReplies extends Comment {
   replies?: CommentWithReplies[];
   profiles?: Profile;
 }
 
 interface PostCardProps {
-  post: Post;
+  post: Post & {
+    like_count?: number;
+    comment_count?: number;
+    user_has_liked?: boolean;
+  };
   currentUserId?: string;
+  currentUserProfile?: Profile | null;
   onDelete?: (postId: string) => void;
 }
 
@@ -106,23 +119,26 @@ function CommentItem({
   );
 }
 
-export default function PostCard({ post, currentUserId, onDelete }: PostCardProps) {
-  const [liked, setLiked] = useState(
-    post.likes?.some((like) => like.user_id === currentUserId) || false
-  );
-  const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
+export default function PostCard({ post, currentUserId, currentUserProfile, onDelete }: PostCardProps) {
+  // Use pre-calculated values from optimized query
+  const [liked, setLiked] = useState(post.user_has_liked || false);
+  const [likeCount, setLikeCount] = useState(post.like_count ?? post.likes?.length ?? 0);
   const [likeAnimation, setLikeAnimation] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [comment, setComment] = useState('');
   const [comments, setComments] = useState<CommentWithReplies[]>([]);
+  const [commentsLoaded, setCommentsLoaded] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [commentCount, setCommentCount] = useState(post.comment_count ?? 0);
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [mentionResults, setMentionResults] = useState<Profile[]>([]);
+  const [mentionResults, setMentionResults] = useState<MentionUser[]>([]);
   const [showMentions, setShowMentions] = useState(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
+  const mentionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   // Build comment tree structure
   const buildCommentTree = (flatComments: Comment[]): CommentWithReplies[] => {
@@ -162,62 +178,74 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
     return count;
   };
 
-  // Organize comments with replies
-  useEffect(() => {
-    if (post.comments) {
-      const tree = buildCommentTree(post.comments);
-      setComments(tree);
-    }
-  }, [post.comments]);
+  // Lazy load comments when user opens comment section
+  const loadComments = useCallback(async () => {
+    if (commentsLoaded || loadingComments) return;
 
-  const handleLike = async () => {
+    setLoadingComments(true);
+    const { data } = await supabase
+      .from('comments')
+      .select('*, profiles(id, username, full_name, avatar_url, nickname)')
+      .eq('post_id', post.id)
+      .order('created_at', { ascending: true });
+
+    if (data) {
+      const tree = buildCommentTree(data);
+      setComments(tree);
+      setCommentsLoaded(true);
+    }
+    setLoadingComments(false);
+  }, [supabase, post.id, commentsLoaded, loadingComments]);
+
+  // Load comments when section is opened
+  useEffect(() => {
+    if (showComments && !commentsLoaded) {
+      loadComments();
+    }
+  }, [showComments, commentsLoaded, loadComments]);
+
+  const handleLike = useCallback(async () => {
     if (!currentUserId) return;
 
     setLikeAnimation(true);
     setTimeout(() => setLikeAnimation(false), 600);
 
-    if (liked) {
+    // Optimistic update
+    const wasLiked = liked;
+    setLiked(!wasLiked);
+    setLikeCount((prev) => wasLiked ? prev - 1 : prev + 1);
+
+    if (wasLiked) {
       await supabase
         .from('likes')
         .delete()
         .eq('post_id', post.id)
         .eq('user_id', currentUserId);
-      setLikeCount((prev) => prev - 1);
     } else {
       await supabase
         .from('likes')
         .insert({ post_id: post.id, user_id: currentUserId });
-      setLikeCount((prev) => prev + 1);
 
       // Send notification to post owner (if not liking own post)
-      if (post.user_id !== currentUserId) {
-        // Get current user's name for notification
-        const { data: currentProfile } = await supabase
-          .from('profiles')
-          .select('full_name, username')
-          .eq('id', currentUserId)
-          .single();
-
-        if (currentProfile) {
-          // Create database notification (for realtime + badge)
-          await supabase.from('notifications').insert({
-            user_id: post.user_id,
-            type: 'like',
-            data: {
-              user_id: currentUserId,
-              user_name: currentProfile.full_name,
-              user_username: currentProfile.username,
-              post_id: post.id,
-            },
-          });
-
-          // Send push notification (for browser notification)
-          sendLikeNotification(post.user_id, currentProfile.full_name, post.id);
-        }
+      // Use currentUserProfile from props instead of fetching again
+      if (post.user_id !== currentUserId && currentUserProfile) {
+        // Create database notification (for realtime + badge)
+        supabase.from('notifications').insert({
+          user_id: post.user_id,
+          type: 'like',
+          data: {
+            user_id: currentUserId,
+            user_name: currentUserProfile.full_name,
+            user_username: currentUserProfile.username,
+            post_id: post.id,
+          },
+        }).then(() => {
+          // Send push notification (fire and forget)
+          sendLikeNotification(post.user_id, currentUserProfile.full_name, post.id);
+        });
       }
     }
-    setLiked(!liked);
-  };
+  }, [currentUserId, currentUserProfile, liked, post.id, post.user_id, supabase]);
 
   // Add new comment to tree
   const addCommentToTree = (
@@ -240,54 +268,53 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
     });
   };
 
-  const handleComment = async (e: React.FormEvent) => {
+  const handleComment = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!comment.trim() || !currentUserId) return;
+
+    const commentContent = comment;
+    setComment(''); // Clear immediately for better UX
 
     const commentData: Record<string, string | null> = {
       post_id: post.id,
       user_id: currentUserId,
-      content: comment,
+      content: commentContent,
       parent_id: replyingTo?.id || null,
     };
 
     const { data, error } = await supabase
       .from('comments')
       .insert(commentData)
-      .select('*, profiles(*)')
+      .select('*, profiles(id, username, full_name, avatar_url, nickname)')
       .single();
 
     if (!error && data) {
-      // Get current user's name for notifications
-      const { data: currentProfile } = await supabase
-        .from('profiles')
-        .select('full_name, username')
-        .eq('id', currentUserId)
-        .single();
+      // Update comment count
+      setCommentCount((prev) => prev + 1);
 
       // Send notification to post owner (if not commenting on own post)
-      if (post.user_id !== currentUserId && currentProfile) {
-        // Create database notification (for realtime + badge)
-        await supabase.from('notifications').insert({
+      // Use currentUserProfile from props instead of fetching again
+      if (post.user_id !== currentUserId && currentUserProfile) {
+        // Fire and forget - don't await
+        supabase.from('notifications').insert({
           user_id: post.user_id,
           type: 'comment',
           data: {
             user_id: currentUserId,
-            user_name: currentProfile.full_name,
-            user_username: currentProfile.username,
+            user_name: currentUserProfile.full_name,
+            user_username: currentUserProfile.username,
             post_id: post.id,
-            comment_preview: comment.substring(0, 50),
+            comment_preview: commentContent.substring(0, 50),
           },
+        }).then(() => {
+          sendCommentNotification(post.user_id, currentUserProfile.full_name, post.id, commentContent);
         });
-
-        // Send push notification (for browser notification)
-        sendCommentNotification(post.user_id, currentProfile.full_name, post.id, comment);
       }
 
-      // Extract mentions and create notifications
-      const mentions = comment.match(/@(\w+)/g);
-      if (mentions) {
-        for (const mention of mentions) {
+      // Extract mentions and create notifications (fire and forget)
+      const mentions = commentContent.match(/@(\w+)/g);
+      if (mentions && currentUserProfile) {
+        mentions.forEach(async (mention) => {
           const username = mention.slice(1);
           const { data: mentionedUser } = await supabase
             .from('profiles')
@@ -296,21 +323,20 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
             .single();
 
           if (mentionedUser) {
-            await supabase.from('mentions').insert({
+            supabase.from('mentions').insert({
               comment_id: data.id,
               mentioned_user_id: mentionedUser.id,
               mentioned_by: currentUserId,
             });
           }
-        }
+        });
       }
 
       const newComment: CommentWithReplies = { ...data, replies: [] };
-      setComments(addCommentToTree(comments, newComment, replyingTo?.id || null));
-      setComment('');
+      setComments((prev) => addCommentToTree(prev, newComment, replyingTo?.id || null));
       setReplyingTo(null);
     }
-  };
+  }, [comment, currentUserId, currentUserProfile, post.id, post.user_id, replyingTo?.id, supabase]);
 
   const handleReply = (commentId: string, username: string) => {
     setReplyingTo({ id: commentId, username });
@@ -326,19 +352,26 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
     onDelete?.(post.id);
   };
 
-  const handleMentionSearch = async (searchText: string) => {
+  // Debounced mention search
+  const handleMentionSearch = useCallback((searchText: string) => {
+    if (mentionTimeoutRef.current) {
+      clearTimeout(mentionTimeoutRef.current);
+    }
+
     if (searchText.length > 0) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .ilike('username', `${searchText}%`)
-        .limit(5);
-      setMentionResults(data || []);
-      setShowMentions(true);
+      mentionTimeoutRef.current = setTimeout(async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, username, full_name, avatar_url')
+          .ilike('username', `${searchText}%`)
+          .limit(5);
+        setMentionResults((data as MentionUser[]) || []);
+        setShowMentions(true);
+      }, 300); // 300ms debounce
     } else {
       setShowMentions(false);
     }
-  };
+  }, [supabase]);
 
   const handleCommentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -395,7 +428,8 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
     });
   };
 
-  const totalComments = countAllComments(comments);
+  // Use comment_count from server or count from loaded comments
+  const displayCommentCount = commentsLoaded ? countAllComments(comments) : commentCount;
 
   return (
     <>
@@ -531,7 +565,7 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
               }`}
             >
               <span>💬</span>
-              <span className="font-medium">{totalComments}</span>
+              <span className="font-medium">{displayCommentCount}</span>
             </button>
           </div>
 
@@ -609,20 +643,24 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
 
             {/* Comments List */}
             <div className="px-4 pb-4 space-y-4 max-h-[500px] overflow-y-auto">
-              {comments.map((c) => (
-                <CommentItem
-                  key={c.id}
-                  comment={c}
-                  onReply={handleReply}
-                  renderContent={renderContent}
-                  timeAgo={timeAgo}
-                />
-              ))}
-
-              {comments.length === 0 && (
+              {loadingComments ? (
+                <div className="flex justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
+                </div>
+              ) : comments.length === 0 ? (
                 <p className="text-center text-gray-500 py-4">
                   İlk yorumu sen yap!
                 </p>
+              ) : (
+                comments.map((c) => (
+                  <CommentItem
+                    key={c.id}
+                    comment={c}
+                    onReply={handleReply}
+                    renderContent={renderContent}
+                    timeAgo={timeAgo}
+                  />
+                ))
               )}
             </div>
           </div>
