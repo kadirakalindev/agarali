@@ -13,8 +13,15 @@ export const metadata: Metadata = {
   description: "Agara Köyü sakinleri için sosyal paylaşım platformu",
   manifest: "/manifest.json",
   icons: {
-    icon: "/favicon.ico",
-    apple: "/icons/icon-192x192.png",
+    icon: [
+      { url: "/favicon.png", sizes: "48x48", type: "image/png" },
+      { url: "/icons/android/android-launchericon-96-96.png", sizes: "96x96", type: "image/png" },
+      { url: "/icons/android/android-launchericon-192-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/ios/180.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/favicon.png",
   },
   appleWebApp: {
     capable: true,
