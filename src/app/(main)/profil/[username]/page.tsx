@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ProfileSkeleton, PostSkeleton } from '@/components/ui/Skeleton';
+import { Lightbox } from '@/components/ui/Lightbox';
 import PostCard from '@/components/PostCard';
 import { sendFollowNotification } from '@/lib/send-push-notification';
 import type { Profile, Post } from '@/types';
@@ -24,6 +25,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'media'>('posts');
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const supabase = createClient();
 
   useEffect(() => {
@@ -190,11 +193,11 @@ export default function ProfilePage() {
                 )}
               </div>
               <div className="pb-2">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center flex-wrap gap-2">
                   {profile.full_name}
                   {profile.nickname && (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-normal ml-2">
-                      &quot;{profile.nickname}&quot;
+                    <span className="px-2 py-0.5 text-sm font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-md">
+                      {profile.nickname}
                     </span>
                   )}
                 </h1>
@@ -344,45 +347,65 @@ export default function ProfilePage() {
               <p className="text-gray-500">Medya içerikli gönderi yok</p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-1">
-              {mediaPosts.flatMap((post) =>
-                post.post_media?.map((media) => (
-                  <div
-                    key={media.id}
-                    className="aspect-square relative group cursor-pointer overflow-hidden rounded-lg"
-                  >
-                    {media.file_type === 'image' ? (
-                      <img
-                        src={media.file_url}
-                        alt=""
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="relative w-full h-full">
-                        <video src={media.file_url} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-12 h-12 bg-black/50 rounded-full flex items-center justify-center">
-                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-                            </svg>
+            <>
+              <div className="grid grid-cols-3 gap-1">
+                {(() => {
+                  const allMedia = mediaPosts.flatMap((post) =>
+                    post.post_media?.map((media) => ({ post, media })) || []
+                  );
+                  return allMedia.map(({ post, media }, index) => (
+                    <div
+                      key={media.id}
+                      className="aspect-square relative group cursor-pointer overflow-hidden rounded-lg"
+                      onClick={() => {
+                        setLightboxIndex(index);
+                        setLightboxOpen(true);
+                      }}
+                    >
+                      {media.file_type === 'image' ? (
+                        <img
+                          src={media.file_url}
+                          alt=""
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="relative w-full h-full">
+                          <video src={media.file_url} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-12 h-12 bg-black/50 rounded-full flex items-center justify-center">
+                              <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                              </svg>
+                            </div>
                           </div>
                         </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white">
+                        <span className="flex items-center gap-1">
+                          <span>❤️</span>
+                          {post.likes?.length || 0}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span>💬</span>
+                          {post.comments?.length || 0}
+                        </span>
                       </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white">
-                      <span className="flex items-center gap-1">
-                        <span>❤️</span>
-                        {post.likes?.length || 0}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span>💬</span>
-                        {post.comments?.length || 0}
-                      </span>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
+                  ));
+                })()}
+              </div>
+              <Lightbox
+                images={mediaPosts.flatMap((post) =>
+                  post.post_media?.map((media) => ({
+                    url: media.file_url,
+                    type: media.file_type as 'image' | 'video',
+                  })) || []
+                )}
+                initialIndex={lightboxIndex}
+                isOpen={lightboxOpen}
+                onClose={() => setLightboxOpen(false)}
+              />
+            </>
           )}
         </div>
       )}

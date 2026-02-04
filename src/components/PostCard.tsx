@@ -56,8 +56,8 @@ function CommentItem({
             >
               {comment.profiles?.full_name}
               {comment.profiles?.nickname && (
-                <span className="text-emerald-600 dark:text-emerald-400 font-normal ml-1">
-                  &quot;{comment.profiles.nickname}&quot;
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded">
+                  {comment.profiles.nickname}
                 </span>
               )}
             </Link>
@@ -412,8 +412,8 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
               <p className="font-semibold text-gray-900 dark:text-white group-hover:text-emerald-600 transition-colors">
                 {post.profiles?.full_name}
                 {post.profiles?.nickname && (
-                  <span className="text-emerald-600 dark:text-emerald-400 font-normal ml-1">
-                    &quot;{post.profiles.nickname}&quot;
+                  <span className="ml-1.5 px-1.5 py-0.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded">
+                    {post.profiles.nickname}
                   </span>
                 )}
               </p>

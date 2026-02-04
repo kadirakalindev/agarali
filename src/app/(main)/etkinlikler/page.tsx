@@ -14,6 +14,7 @@ export default function EventsPage() {
   const [pastEvents, setPastEvents] = useState<Event[]>([]);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
   const supabase = createClient();
@@ -246,7 +247,10 @@ export default function EventsPage() {
                 style={{ animationDelay: `${index * 0.05}s` }}
                 className="animate-slideUp"
               >
-                <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden ${isPast ? 'opacity-70' : ''}`}>
+                <div
+                  className={`bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow ${isPast ? 'opacity-70' : ''}`}
+                  onClick={() => setSelectedEvent(event)}
+                >
                   <div className="flex">
                     {/* Date Box */}
                     <div className="w-20 flex-shrink-0 bg-emerald-50 dark:bg-emerald-900/20 flex flex-col items-center justify-center p-4 border-r border-gray-100 dark:border-gray-700">
@@ -304,14 +308,20 @@ export default function EventsPage() {
                           <Button
                             size="sm"
                             variant={userParticipation?.status === 'going' ? 'primary' : 'secondary'}
-                            onClick={() => handleParticipate(event.id, 'going')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleParticipate(event.id, 'going');
+                            }}
                           >
                             {userParticipation?.status === 'going' ? '✓ Katılıyorum' : 'Katıl'}
                           </Button>
                           <Button
                             size="sm"
                             variant={userParticipation?.status === 'interested' ? 'primary' : 'ghost'}
-                            onClick={() => handleParticipate(event.id, 'interested')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleParticipate(event.id, 'interested');
+                            }}
                           >
                             {userParticipation?.status === 'interested' ? '★ İlgileniyorum' : '☆ İlgileniyorum'}
                           </Button>
@@ -411,6 +421,138 @@ export default function EventsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Event Detail Modal */}
+      <Modal
+        isOpen={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        title={selectedEvent?.title || 'Etkinlik Detayı'}
+      >
+        {selectedEvent && (() => {
+          const date = formatDate(selectedEvent.event_date);
+          const goingUsers = selectedEvent.event_participants?.filter((p) => p.status === 'going') || [];
+          const interestedUsers = selectedEvent.event_participants?.filter((p) => p.status === 'interested') || [];
+          const userParticipation = selectedEvent.event_participants?.find((p) => p.user_id === currentUser?.id);
+          const isPast = new Date(selectedEvent.event_date) < new Date();
+
+          return (
+            <div className="p-6 space-y-5">
+              {/* Date and Location */}
+              <div className="flex items-start gap-4">
+                <div className="w-16 h-16 flex-shrink-0 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex flex-col items-center justify-center">
+                  <span className="text-xs font-medium text-emerald-600">{date.month}</span>
+                  <span className="text-2xl font-bold text-gray-900 dark:text-white">{date.day}</span>
+                </div>
+                <div>
+                  <p className="text-gray-900 dark:text-white font-medium">{date.full}</p>
+                  <p className="text-sm text-gray-500">{date.time}</p>
+                  {selectedEvent.location && (
+                    <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {selectedEvent.location}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Description */}
+              {selectedEvent.description && (
+                <div>
+                  <p className="text-gray-600 dark:text-gray-400">{selectedEvent.description}</p>
+                </div>
+              )}
+
+              {/* Organizer */}
+              <div className="flex items-center gap-2 pb-4 border-b border-gray-200 dark:border-gray-700">
+                <Avatar src={selectedEvent.profiles?.avatar_url} alt={selectedEvent.profiles?.full_name || ''} size="sm" />
+                <div>
+                  <p className="text-sm text-gray-500">Düzenleyen</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{selectedEvent.profiles?.full_name}</p>
+                </div>
+              </div>
+
+              {/* Participants */}
+              <div className="space-y-4">
+                {/* Going */}
+                <div>
+                  <h4 className="text-sm font-semibold text-emerald-600 mb-2 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-xs">
+                      {goingUsers.length}
+                    </span>
+                    Katılıyor
+                  </h4>
+                  {goingUsers.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {goingUsers.map((p) => (
+                        <div key={p.user_id} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700/50 px-3 py-1.5 rounded-full">
+                          <Avatar src={p.profiles?.avatar_url} alt={p.profiles?.full_name || ''} size="xs" />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{p.profiles?.full_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Henüz kimse katılmıyor</p>
+                  )}
+                </div>
+
+                {/* Interested */}
+                <div>
+                  <h4 className="text-sm font-semibold text-blue-600 mb-2 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-xs">
+                      {interestedUsers.length}
+                    </span>
+                    İlgileniyor
+                  </h4>
+                  {interestedUsers.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {interestedUsers.map((p) => (
+                        <div key={p.user_id} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700/50 px-3 py-1.5 rounded-full">
+                          <Avatar src={p.profiles?.avatar_url} alt={p.profiles?.full_name || ''} size="xs" />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{p.profiles?.full_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Henüz kimse ilgilenmiyor</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              {!isPast && (
+                <div className="flex gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <Button
+                    variant={userParticipation?.status === 'going' ? 'primary' : 'secondary'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleParticipate(selectedEvent.id, 'going');
+                      // Update the selected event locally
+                      setSelectedEvent(null);
+                    }}
+                    className="flex-1"
+                  >
+                    {userParticipation?.status === 'going' ? '✓ Katılıyorum' : 'Katıl'}
+                  </Button>
+                  <Button
+                    variant={userParticipation?.status === 'interested' ? 'primary' : 'ghost'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleParticipate(selectedEvent.id, 'interested');
+                      setSelectedEvent(null);
+                    }}
+                    className="flex-1"
+                  >
+                    {userParticipation?.status === 'interested' ? '★ İlgileniyorum' : '☆ İlgileniyorum'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

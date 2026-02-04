@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { Lightbox } from '@/components/ui/Lightbox';
 import PostCard from '@/components/PostCard';
 import type { Profile, Post } from '@/types';
 
@@ -23,6 +24,8 @@ export default function ExplorePage() {
   const [recentMedia, setRecentMedia] = useState<{ post: Post; media: { file_url: string; file_type: string } }[]>([]);
   const [loading, setLoading] = useState(true);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const supabase = createClient();
 
   useEffect(() => {
@@ -216,6 +219,10 @@ export default function ExplorePage() {
               <div
                 key={`${post.id}-${index}`}
                 className="aspect-square relative group cursor-pointer overflow-hidden rounded-lg"
+                onClick={() => {
+                  setLightboxIndex(index);
+                  setLightboxOpen(true);
+                }}
               >
                 {media.file_type === 'image' ? (
                   <img
@@ -250,6 +257,17 @@ export default function ExplorePage() {
           </div>
         </div>
       )}
+
+      {/* Media Lightbox */}
+      <Lightbox
+        images={recentMedia.map(({ media }) => ({
+          url: media.file_url,
+          type: media.file_type as 'image' | 'video',
+        }))}
+        initialIndex={lightboxIndex}
+        isOpen={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+      />
 
       {/* Popular Posts */}
       <div>
