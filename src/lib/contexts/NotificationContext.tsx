@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ToastContainer, ToastData } from '@/components/ui/Toast';
@@ -35,12 +35,51 @@ interface NotificationProviderProps {
   userId: string | null;
 }
 
+// Notification mesajını hesapla (useEffect dışında)
+function getNotificationMessage(notification: Notification) {
+  const data = notification.data as Record<string, string>;
+  switch (notification.type) {
+    case 'like':
+      return {
+        title: 'Yeni Beğeni',
+        message: `${data.user_name || 'Birisi'} gönderinizi beğendi`,
+        url: data.post_id ? `/gonderi/${data.post_id}` : '/bildirimler',
+      };
+    case 'comment':
+      return {
+        title: 'Yeni Yorum',
+        message: `${data.user_name || 'Birisi'} gönderinize yorum yaptı`,
+        url: data.post_id ? `/gonderi/${data.post_id}` : '/bildirimler',
+      };
+    case 'follow':
+      return {
+        title: 'Yeni Takipçi',
+        message: `${data.user_name || 'Birisi'} sizi takip etmeye başladı`,
+        url: data.user_username ? `/profil/${data.user_username}` : '/bildirimler',
+      };
+    case 'mention':
+      return {
+        title: 'Sizden Bahsedildi',
+        message: `${data.user_name || 'Birisi'} sizden bahsetti`,
+        url: data.post_id ? `/gonderi/${data.post_id}` : '/bildirimler',
+      };
+    default:
+      return {
+        title: 'Yeni Bildirim',
+        message: 'Yeni bir bildiriminiz var',
+        url: '/bildirimler',
+      };
+  }
+}
+
 export function NotificationProvider({ children, userId }: NotificationProviderProps) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const router = useRouter();
-  const supabase = createClient();
+
+  // Supabase client'ı memoize et
+  const supabase = useMemo(() => createClient(), []);
 
   const showToast = useCallback((toast: Omit<ToastData, 'id'>) => {
     const id = Math.random().toString(36).substring(7);
@@ -91,43 +130,6 @@ export function NotificationProvider({ children, userId }: NotificationProviderP
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     setUnreadCount(0);
   }, [userId, supabase]);
-
-  // Get notification message based on type
-  const getNotificationMessage = (notification: Notification) => {
-    const data = notification.data as Record<string, string>;
-    switch (notification.type) {
-      case 'like':
-        return {
-          title: 'Yeni Beğeni',
-          message: `${data.user_name || 'Birisi'} gönderinizi beğendi`,
-          url: data.post_id ? `/gonderi/${data.post_id}` : '/bildirimler',
-        };
-      case 'comment':
-        return {
-          title: 'Yeni Yorum',
-          message: `${data.user_name || 'Birisi'} gönderinize yorum yaptı`,
-          url: data.post_id ? `/gonderi/${data.post_id}` : '/bildirimler',
-        };
-      case 'follow':
-        return {
-          title: 'Yeni Takipçi',
-          message: `${data.user_name || 'Birisi'} sizi takip etmeye başladı`,
-          url: data.user_username ? `/profil/${data.user_username}` : '/bildirimler',
-        };
-      case 'mention':
-        return {
-          title: 'Sizden Bahsedildi',
-          message: `${data.user_name || 'Birisi'} sizden bahsetti`,
-          url: data.post_id ? `/gonderi/${data.post_id}` : '/bildirimler',
-        };
-      default:
-        return {
-          title: 'Yeni Bildirim',
-          message: 'Yeni bir bildiriminiz var',
-          url: '/bildirimler',
-        };
-    }
-  };
 
   // Subscribe to realtime notifications
   useEffect(() => {

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { Avatar } from './ui/Avatar';
 import { useSiteSettings } from '@/lib/contexts/SiteSettingsContext';
 import { useNotificationsSafe } from '@/lib/contexts/NotificationContext';
@@ -15,7 +15,7 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const { settings } = useSiteSettings();
   const notificationContext = useNotificationsSafe();
   const unreadNotifications = notificationContext?.unreadCount ?? 0;
@@ -98,21 +98,18 @@ export default function Navbar() {
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <Link href="/feed" className="flex items-center space-x-2 group">
+            <Link href="/feed" className="flex items-center group">
               {settings.site_logo ? (
                 <img
                   src={settings.site_logo}
                   alt={settings.site_name}
-                  className="w-10 h-10 rounded-xl object-contain"
+                  className="h-10 sm:h-12 w-auto object-contain"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-emerald-500/20 group-hover:shadow-emerald-500/40 transition-shadow">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-emerald-500/20 group-hover:shadow-emerald-500/40 transition-shadow">
                   {settings.site_name.charAt(0)}
                 </div>
               )}
-              <span className="font-bold text-xl text-gray-900 dark:text-white hidden sm:block">
-                {settings.site_name.split(' ')[0]}
-              </span>
             </Link>
 
             {/* Desktop Nav */}

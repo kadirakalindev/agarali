@@ -198,21 +198,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
         </aside>
 
-        {/* Mobile Bottom Nav */}
+        {/* Mobile Bottom Nav - Scrollable */}
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-40">
-          <div className="flex items-center justify-around py-2">
+          <div className="flex items-center overflow-x-auto no-scrollbar py-2 px-2 gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${
+                className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors flex-shrink-0 min-w-[60px] ${
                   pathname === item.href
-                    ? 'text-emerald-600'
+                    ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30'
                     : 'text-gray-500'
                 }`}
               >
                 {item.icon}
-                <span className="text-xs font-medium">{item.label.split(' ')[0]}</span>
+                <span className="text-[10px] font-medium whitespace-nowrap">{item.label.split(' ')[0]}</span>
               </Link>
             ))}
           </div>

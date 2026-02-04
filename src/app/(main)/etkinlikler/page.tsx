@@ -360,7 +360,7 @@ export default function EventsPage() {
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Köy Şenliği 2024"
+              placeholder="Köy Şenliği 2026"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import StoryBar from '@/components/StoryBar';
@@ -24,7 +24,9 @@ export default function FeedPage() {
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
-  const supabase = createClient();
+
+  // Supabase client'ı memoize et
+  const supabase = useMemo(() => createClient(), []);
 
   const fetchPosts = useCallback(async (offset = 0) => {
     const { data, error } = await supabase
@@ -52,68 +54,78 @@ export default function FeedPage() {
   }, [supabase]);
 
   const fetchSidebar = useCallback(async (userId: string) => {
-    // Get following IDs
-    const { data: followingData } = await supabase
-      .from('follows')
-      .select('following_id')
-      .eq('follower_id', userId);
+    const now = new Date().toISOString();
+
+    // Tüm fetch'leri paralel yap (Promise.all ile)
+    const [
+      { data: followingData },
+      { data: allUsers },
+      { data: events },
+      { data: announcementsData },
+      { data: pollsData },
+    ] = await Promise.all([
+      // Get following IDs
+      supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', userId),
+
+      // Suggested users
+      supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', userId)
+        .eq('is_approved', true)
+        .limit(10),
+
+      // Upcoming events
+      supabase
+        .from('events')
+        .select('*, profiles(*), event_participants(*)')
+        .gte('event_date', now)
+        .order('event_date', { ascending: true })
+        .limit(3),
+
+      // Active announcements
+      supabase
+        .from('announcements')
+        .select('*, profiles(*)')
+        .eq('is_active', true)
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(5),
+
+      // Active polls
+      supabase
+        .from('polls')
+        .select(`
+          *,
+          profiles(*),
+          poll_options(*),
+          poll_votes(*, profiles(*))
+        `)
+        .eq('is_active', true)
+        .or(`ends_at.is.null,ends_at.gt.${now}`)
+        .order('created_at', { ascending: false })
+        .limit(3),
+    ]);
 
     const followIds = followingData?.map((f) => f.following_id) || [];
     setFollowingIds(followIds);
 
-    // Suggested users (not following)
-    const { data: allUsers } = await supabase
-      .from('profiles')
-      .select('*')
-      .neq('id', userId)
-      .eq('is_approved', true)
-      .limit(10);
-
     if (allUsers) {
-      // Filter out users that are already being followed
       const notFollowing = allUsers.filter((u) => !followIds.includes(u.id));
       setSuggestedUsers(notFollowing.slice(0, 5));
     }
-
-    // Upcoming events
-    const { data: events } = await supabase
-      .from('events')
-      .select('*, profiles(*), event_participants(*)')
-      .gte('event_date', new Date().toISOString())
-      .order('event_date', { ascending: true })
-      .limit(3);
 
     if (events) {
       setUpcomingEvents(events);
     }
 
-    // Fetch active announcements (pinned ones first)
-    const { data: announcementsData } = await supabase
-      .from('announcements')
-      .select('*, profiles(*)')
-      .eq('is_active', true)
-      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-      .order('is_pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(5);
-
     if (announcementsData) {
       setAnnouncements(announcementsData);
     }
-
-    // Fetch active polls
-    const { data: pollsData } = await supabase
-      .from('polls')
-      .select(`
-        *,
-        profiles(*),
-        poll_options(*),
-        poll_votes(*, profiles(*))
-      `)
-      .eq('is_active', true)
-      .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`)
-      .order('created_at', { ascending: false })
-      .limit(3);
 
     if (pollsData) {
       setPolls(pollsData);
@@ -451,7 +463,7 @@ export default function FeedPage() {
             {/* Footer */}
             <div className="text-center text-xs text-gray-400 py-4">
               <p>Agara Köyü Sosyal Ağı</p>
-              <p className="mt-1">&copy; 2024</p>
+              <p className="mt-1">&copy; 2026</p>
             </div>
           </div>
         </aside>
