@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import StoryBar from '@/components/StoryBar';
@@ -12,6 +12,7 @@ import { PostSkeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { SuggestedUsersSlider } from '@/components/SuggestedUsersSlider';
+import { PullToRefresh } from '@/components/PullToRefresh';
 import type { Post, Profile, Event, Announcement, Poll } from '@/types';
 
 export default function FeedPage() {
@@ -25,6 +26,9 @@ export default function FeedPage() {
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
+  const [newPostsCount, setNewPostsCount] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const storyBarRef = useRef<{ refresh: () => void } | null>(null);
 
   // Supabase client'ı memoize et
   const supabase = useMemo(() => createClient(), []);
@@ -134,9 +138,12 @@ export default function FeedPage() {
   }, [supabase]);
 
   useEffect(() => {
+    let currentUserId: string | null = null;
+
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        currentUserId = user.id;
         const { data } = await supabase
           .from('profiles')
           .select('*')
@@ -150,6 +157,61 @@ export default function FeedPage() {
       fetchPosts();
     }
     init();
+
+    // Realtime subscription for new posts
+    const postsChannel = supabase
+      .channel('posts-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'posts',
+        },
+        (payload) => {
+          // Don't count own posts as new
+          if (payload.new && (payload.new as Post).user_id !== currentUserId) {
+            setNewPostsCount((prev) => prev + 1);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'posts',
+        },
+        (payload) => {
+          // Remove deleted post from list
+          if (payload.old) {
+            setPosts((prev) => prev.filter((p) => p.id !== (payload.old as Post).id));
+          }
+        }
+      )
+      .subscribe();
+
+    // Realtime subscription for new stories
+    const storiesChannel = supabase
+      .channel('stories-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'stories',
+        },
+        () => {
+          // Refresh story bar when new story added
+          storyBarRef.current?.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(postsChannel);
+      supabase.removeChannel(storiesChannel);
+    };
   }, [supabase, fetchPosts, fetchSidebar]);
 
   // Infinite scroll
@@ -190,6 +252,28 @@ export default function FeedPage() {
     fetchPosts(0);
   };
 
+  // Load new posts (when banner is clicked)
+  const loadNewPosts = useCallback(async () => {
+    setNewPostsCount(0);
+    setLoading(true);
+    await fetchPosts(0);
+    // Scroll to top smoothly
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [fetchPosts]);
+
+  // Pull-to-refresh handler
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    setNewPostsCount(0);
+    await Promise.all([
+      fetchPosts(0),
+      profile ? fetchSidebar(profile.id) : Promise.resolve(),
+    ]);
+    // Also refresh stories
+    storyBarRef.current?.refresh();
+    setIsRefreshing(false);
+  }, [fetchPosts, fetchSidebar, profile]);
+
   const refreshPolls = useCallback(async () => {
     const { data: pollsData } = await supabase
       .from('polls')
@@ -210,12 +294,25 @@ export default function FeedPage() {
   }, [supabase]);
 
   return (
-    <div className="animate-fadeIn">
+    <PullToRefresh onRefresh={handleRefresh} className="animate-fadeIn">
+      {/* New Posts Banner */}
+      {newPostsCount > 0 && (
+        <button
+          onClick={loadNewPosts}
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-30 px-6 py-3 bg-emerald-600 text-white rounded-full shadow-lg hover:bg-emerald-700 transition-all animate-slideDown flex items-center gap-2 font-medium"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+          {newPostsCount} yeni gönderi
+        </button>
+      )}
+
       <div className="flex gap-8">
         {/* Main Content */}
         <div className="flex-1 min-w-0 max-w-2xl">
           {/* Stories */}
-          <StoryBar currentUserId={profile?.id} />
+          <StoryBar ref={storyBarRef} currentUserId={profile?.id} />
 
           {/* Suggested Users Slider - Only on mobile/tablet */}
           {suggestedUsers.length > 0 && (
@@ -485,6 +582,6 @@ export default function FeedPage() {
           </div>
         </aside>
       </div>
-    </div>
+    </PullToRefresh>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Avatar } from './ui/Avatar';
 import { Modal } from './ui/Modal';
@@ -18,7 +18,11 @@ interface StoryBarProps {
   currentUserId?: string;
 }
 
-export default function StoryBar({ currentUserId }: StoryBarProps) {
+export interface StoryBarRef {
+  refresh: () => void;
+}
+
+const StoryBar = forwardRef<StoryBarRef, StoryBarProps>(function StoryBar({ currentUserId }, ref) {
   const [storyGroups, setStoryGroups] = useState<StoryGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -63,6 +67,13 @@ export default function StoryBar({ currentUserId }: StoryBarProps) {
   useEffect(() => {
     fetchStories();
   }, [fetchStories]);
+
+  // Expose refresh function to parent
+  useImperativeHandle(ref, () => ({
+    refresh: () => {
+      fetchStories();
+    },
+  }), [fetchStories]);
 
   // Story progress timer
   useEffect(() => {
@@ -439,4 +450,6 @@ export default function StoryBar({ currentUserId }: StoryBarProps) {
       )}
     </>
   );
-}
+});
+
+export default StoryBar;
