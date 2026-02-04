@@ -153,10 +153,195 @@ CREATE POLICY "Admin tüm push subscriptions görebilir" ON push_subscriptions
     );
 
 -- =====================================================
+-- 8. Duyuru (Announcement) Sistemi
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS announcements (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    priority TEXT DEFAULT 'normal' CHECK (priority IN ('normal', 'important', 'urgent')),
+    is_pinned BOOLEAN DEFAULT false,
+    is_active BOOLEAN DEFAULT true,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Duyuru RLS politikaları
+ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+
+-- Herkes aktif duyuruları görebilir, admin tümünü görebilir
+CREATE POLICY "Aktif duyurular herkese açık" ON announcements
+    FOR SELECT USING (
+        (is_active = true AND (expires_at IS NULL OR expires_at > NOW()))
+        OR EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- Admin duyuru oluşturabilir
+CREATE POLICY "Admin duyuru oluşturabilir" ON announcements
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- Admin duyuru güncelleyebilir
+CREATE POLICY "Admin duyuru güncelleyebilir" ON announcements
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- Admin duyuru silebilir
+CREATE POLICY "Admin duyuru silebilir" ON announcements
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- =====================================================
+-- 9. Anket (Poll) Sistemi
+-- =====================================================
+
+-- Ana anket tablosu
+CREATE TABLE IF NOT EXISTS polls (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    question TEXT NOT NULL,
+    description TEXT,
+    poll_type TEXT DEFAULT 'single' CHECK (poll_type IN ('single', 'multiple')),
+    is_active BOOLEAN DEFAULT true,
+    ends_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Anket seçenekleri tablosu
+CREATE TABLE IF NOT EXISTS poll_options (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    poll_id UUID REFERENCES polls(id) ON DELETE CASCADE NOT NULL,
+    option_text TEXT NOT NULL,
+    option_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Anket oyları tablosu
+CREATE TABLE IF NOT EXISTS poll_votes (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    poll_id UUID REFERENCES polls(id) ON DELETE CASCADE NOT NULL,
+    poll_option_id UUID REFERENCES poll_options(id) ON DELETE CASCADE NOT NULL,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tek seçimli anketlerde her kullanıcı sadece bir oy kullanabilir
+CREATE UNIQUE INDEX IF NOT EXISTS idx_poll_votes_single_choice
+ON poll_votes(poll_id, user_id)
+WHERE EXISTS (SELECT 1 FROM polls WHERE polls.id = poll_id AND polls.poll_type = 'single');
+
+-- Çok seçimli anketlerde aynı seçeneğe tekrar oy verilemez
+CREATE UNIQUE INDEX IF NOT EXISTS idx_poll_votes_option_user
+ON poll_votes(poll_option_id, user_id);
+
+-- Anket RLS politikaları
+ALTER TABLE polls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE poll_options ENABLE ROW LEVEL SECURITY;
+ALTER TABLE poll_votes ENABLE ROW LEVEL SECURITY;
+
+-- Herkes aktif anketleri görebilir, admin tümünü görebilir
+CREATE POLICY "Aktif anketler herkese açık" ON polls
+    FOR SELECT USING (
+        (is_active = true AND (ends_at IS NULL OR ends_at > NOW()))
+        OR EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- Admin anket oluşturabilir
+CREATE POLICY "Admin anket oluşturabilir" ON polls
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- Admin anket güncelleyebilir
+CREATE POLICY "Admin anket güncelleyebilir" ON polls
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- Admin anket silebilir
+CREATE POLICY "Admin anket silebilir" ON polls
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- Anket seçenekleri politikaları
+CREATE POLICY "Herkes seçenekleri görebilir" ON poll_options
+    FOR SELECT USING (true);
+
+CREATE POLICY "Admin seçenek ekleyebilir" ON poll_options
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+CREATE POLICY "Admin seçenek silebilir" ON poll_options
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('admin', 'moderator')
+        )
+    );
+
+-- Anket oyları politikaları
+CREATE POLICY "Herkes oyları görebilir" ON poll_votes
+    FOR SELECT USING (true);
+
+CREATE POLICY "Giriş yapan kullanıcılar oy kullanabilir" ON poll_votes
+    FOR INSERT WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Kullanıcı kendi oyunu silebilir" ON poll_votes
+    FOR DELETE USING (user_id = auth.uid());
+
+-- =====================================================
 -- NOTLAR:
 -- - Yeni kayıt olan kullanıcılar is_approved = false olarak başlar
 -- - Admin panelinden onaylanana kadar siteye giremezler
 -- - Mevcut kullanıcıları onaylamak için:
 --   UPDATE profiles SET is_approved = true;
 -- - Lakap sistemi: Kullanıcı lakap girer -> Admin onaylar -> Profilde gösterilir
+-- - Duyuru sistemi: Sadece admin oluşturabilir, öncelik ve sabitleme özellikleri var
+-- - Anket sistemi: Tek seçimli ve çok seçimli, kim oy verdi görülebilir
 -- =====================================================

@@ -6,10 +6,12 @@ import { createClient } from '@/lib/supabase/client';
 import StoryBar from '@/components/StoryBar';
 import CreatePost from '@/components/CreatePost';
 import PostCard from '@/components/PostCard';
+import { AnnouncementCard } from '@/components/AnnouncementCard';
+import { PollCard } from '@/components/PollCard';
 import { PostSkeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import type { Post, Profile, Event } from '@/types';
+import type { Post, Profile, Event, Announcement, Poll } from '@/types';
 
 export default function FeedPage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -20,6 +22,8 @@ export default function FeedPage() {
   const [suggestedUsers, setSuggestedUsers] = useState<Profile[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [polls, setPolls] = useState<Poll[]>([]);
   const supabase = createClient();
 
   const fetchPosts = useCallback(async (offset = 0) => {
@@ -82,6 +86,38 @@ export default function FeedPage() {
     if (events) {
       setUpcomingEvents(events);
     }
+
+    // Fetch active announcements (pinned ones first)
+    const { data: announcementsData } = await supabase
+      .from('announcements')
+      .select('*, profiles(*)')
+      .eq('is_active', true)
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (announcementsData) {
+      setAnnouncements(announcementsData);
+    }
+
+    // Fetch active polls
+    const { data: pollsData } = await supabase
+      .from('polls')
+      .select(`
+        *,
+        profiles(*),
+        poll_options(*),
+        poll_votes(*, profiles(*))
+      `)
+      .eq('is_active', true)
+      .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    if (pollsData) {
+      setPolls(pollsData);
+    }
   }, [supabase]);
 
   useEffect(() => {
@@ -141,6 +177,25 @@ export default function FeedPage() {
     fetchPosts(0);
   };
 
+  const refreshPolls = useCallback(async () => {
+    const { data: pollsData } = await supabase
+      .from('polls')
+      .select(`
+        *,
+        profiles(*),
+        poll_options(*),
+        poll_votes(*, profiles(*))
+      `)
+      .eq('is_active', true)
+      .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    if (pollsData) {
+      setPolls(pollsData);
+    }
+  }, [supabase]);
+
   return (
     <div className="animate-fadeIn">
       <div className="flex gap-8">
@@ -149,9 +204,41 @@ export default function FeedPage() {
           {/* Stories */}
           <StoryBar currentUserId={profile?.id} />
 
+          {/* Pinned Announcements */}
+          {announcements.filter(a => a.is_pinned).length > 0 && (
+            <div className="space-y-3 mb-4">
+              {announcements.filter(a => a.is_pinned).map((announcement) => (
+                <AnnouncementCard key={announcement.id} announcement={announcement} />
+              ))}
+            </div>
+          )}
+
+          {/* Active Polls */}
+          {polls.length > 0 && (
+            <div className="space-y-4 mb-4">
+              {polls.map((poll) => (
+                <PollCard
+                  key={poll.id}
+                  poll={poll}
+                  currentUserId={profile?.id}
+                  onVoteChange={refreshPolls}
+                />
+              ))}
+            </div>
+          )}
+
           {/* Create Post */}
           {profile && (
             <CreatePost profile={profile} onPostCreated={handlePostCreated} />
+          )}
+
+          {/* Other Announcements (not pinned) */}
+          {announcements.filter(a => !a.is_pinned).length > 0 && (
+            <div className="space-y-3 mb-4">
+              {announcements.filter(a => !a.is_pinned).slice(0, 2).map((announcement) => (
+                <AnnouncementCard key={announcement.id} announcement={announcement} />
+              ))}
+            </div>
           )}
 
           {/* Posts */}

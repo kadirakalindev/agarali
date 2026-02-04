@@ -128,3 +128,52 @@ export interface Nickname {
   created_at: string;
   profiles?: Profile;
 }
+
+// Announcement (Duyuru) System
+export interface Announcement {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  priority: 'normal' | 'important' | 'urgent';
+  is_pinned: boolean;
+  is_active: boolean;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+  profiles?: Profile;
+}
+
+// Poll (Anket) System
+export interface Poll {
+  id: string;
+  user_id: string;
+  question: string;
+  description: string | null;
+  poll_type: 'single' | 'multiple';
+  is_active: boolean;
+  ends_at: string | null;
+  created_at: string;
+  updated_at: string;
+  profiles?: Profile;
+  poll_options?: PollOption[];
+  poll_votes?: PollVote[];
+}
+
+export interface PollOption {
+  id: string;
+  poll_id: string;
+  option_text: string;
+  option_order: number;
+  created_at: string;
+  poll_votes?: PollVote[];
+}
+
+export interface PollVote {
+  id: string;
+  poll_id: string;
+  poll_option_id: string;
+  user_id: string;
+  created_at: string;
+  profiles?: Profile;
+}
