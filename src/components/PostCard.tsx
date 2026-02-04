@@ -189,16 +189,29 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
         .insert({ post_id: post.id, user_id: currentUserId });
       setLikeCount((prev) => prev + 1);
 
-      // Send push notification to post owner (if not liking own post)
+      // Send notification to post owner (if not liking own post)
       if (post.user_id !== currentUserId) {
         // Get current user's name for notification
         const { data: currentProfile } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('full_name, username')
           .eq('id', currentUserId)
           .single();
 
         if (currentProfile) {
+          // Create database notification (for realtime + badge)
+          await supabase.from('notifications').insert({
+            user_id: post.user_id,
+            type: 'like',
+            data: {
+              user_id: currentUserId,
+              user_name: currentProfile.full_name,
+              user_username: currentProfile.username,
+              post_id: post.id,
+            },
+          });
+
+          // Send push notification (for browser notification)
           sendLikeNotification(post.user_id, currentProfile.full_name, post.id);
         }
       }
@@ -248,12 +261,26 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
       // Get current user's name for notifications
       const { data: currentProfile } = await supabase
         .from('profiles')
-        .select('full_name')
+        .select('full_name, username')
         .eq('id', currentUserId)
         .single();
 
-      // Send push notification to post owner (if not commenting on own post)
+      // Send notification to post owner (if not commenting on own post)
       if (post.user_id !== currentUserId && currentProfile) {
+        // Create database notification (for realtime + badge)
+        await supabase.from('notifications').insert({
+          user_id: post.user_id,
+          type: 'comment',
+          data: {
+            user_id: currentUserId,
+            user_name: currentProfile.full_name,
+            user_username: currentProfile.username,
+            post_id: post.id,
+            comment_preview: comment.substring(0, 50),
+          },
+        });
+
+        // Send push notification (for browser notification)
         sendCommentNotification(post.user_id, currentProfile.full_name, post.id, comment);
       }
 

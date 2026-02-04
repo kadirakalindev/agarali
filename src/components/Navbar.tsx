@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useEffect, useState, useRef } from 'react';
 import { Avatar } from './ui/Avatar';
 import { useSiteSettings } from '@/lib/contexts/SiteSettingsContext';
+import { useNotificationsSafe } from '@/lib/contexts/NotificationContext';
 import type { Profile } from '@/types';
 
 export default function Navbar() {
@@ -13,10 +14,11 @@ export default function Navbar() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
   const { settings } = useSiteSettings();
+  const notificationContext = useNotificationsSafe();
+  const unreadNotifications = notificationContext?.unreadCount ?? 0;
 
   useEffect(() => {
     async function getProfile() {
@@ -28,14 +30,6 @@ export default function Navbar() {
           .eq('id', user.id)
           .single();
         setProfile(data);
-
-        // Get unread notifications count
-        const { count } = await supabase
-          .from('notifications')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('read', false);
-        setUnreadNotifications(count || 0);
       }
     }
     getProfile();
