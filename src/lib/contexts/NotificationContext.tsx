@@ -12,7 +12,9 @@ interface NotificationContextType {
   showToast: (toast: Omit<ToastData, 'id'>) => void;
   markAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteNotification: (notificationId: string) => Promise<void>;
   refreshNotifications: () => Promise<void>;
+  getNotificationUrl: (notification: Notification) => string | null;
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
@@ -69,6 +71,21 @@ function getNotificationMessage(notification: Notification) {
         message: 'Yeni bir bildiriminiz var',
         url: '/bildirimler',
       };
+  }
+}
+
+// Bildirim URL'ini hesapla
+function getNotificationUrlHelper(notification: Notification): string | null {
+  const data = notification.data as Record<string, string>;
+  switch (notification.type) {
+    case 'like':
+    case 'comment':
+    case 'mention':
+      return data.post_id ? `/gonderi/${data.post_id}` : null;
+    case 'follow':
+      return data.user_username ? `/profil/${data.user_username}` : null;
+    default:
+      return null;
   }
 }
 
@@ -131,6 +148,26 @@ export function NotificationProvider({ children, userId }: NotificationProviderP
     setUnreadCount(0);
   }, [userId, supabase]);
 
+  const deleteNotification = useCallback(async (notificationId: string) => {
+    const notification = notifications.find((n) => n.id === notificationId);
+
+    await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId);
+
+    setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+
+    // Eğer okunmamış bir bildirimse, sayacı düşür
+    if (notification && !notification.read) {
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+  }, [supabase, notifications]);
+
+  const getNotificationUrl = useCallback((notification: Notification) => {
+    return getNotificationUrlHelper(notification);
+  }, []);
+
   // Subscribe to realtime notifications
   useEffect(() => {
     if (!userId) return;
@@ -184,7 +221,9 @@ export function NotificationProvider({ children, userId }: NotificationProviderP
         showToast,
         markAsRead,
         markAllAsRead,
+        deleteNotification,
         refreshNotifications: fetchNotifications,
+        getNotificationUrl,
       }}
     >
       {children}

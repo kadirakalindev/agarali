@@ -1,24 +1,30 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { Avatar } from './ui/Avatar';
 import { useSiteSettings } from '@/lib/contexts/SiteSettingsContext';
 import { useNotificationsSafe } from '@/lib/contexts/NotificationContext';
-import type { Profile } from '@/types';
+import type { Profile, Notification } from '@/types';
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const supabase = useMemo(() => createClient(), []);
   const { settings } = useSiteSettings();
   const notificationContext = useNotificationsSafe();
   const unreadNotifications = notificationContext?.unreadCount ?? 0;
+  const notifications = notificationContext?.notifications ?? [];
+  const markAsRead = notificationContext?.markAsRead;
+  const getNotificationUrl = notificationContext?.getNotificationUrl;
 
   useEffect(() => {
     async function getProfile() {
@@ -36,16 +42,63 @@ export default function Navbar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Close menu when clicking outside
+  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
       }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setNotificationDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Notification helpers
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'like': return '❤️';
+      case 'comment': return '💬';
+      case 'follow': return '👥';
+      case 'mention': return '📢';
+      default: return '🔔';
+    }
+  };
+
+  const getNotificationText = (notification: Notification) => {
+    const data = notification.data as Record<string, string>;
+    switch (notification.type) {
+      case 'like': return `${data.user_name || 'Birisi'} gönderini beğendi`;
+      case 'comment': return `${data.user_name || 'Birisi'} gönderine yorum yaptı`;
+      case 'follow': return `${data.user_name || 'Birisi'} seni takip etmeye başladı`;
+      case 'mention': return `${data.user_name || 'Birisi'} senden bahsetti`;
+      default: return 'Yeni bildirim';
+    }
+  };
+
+  const timeAgo = (date: string) => {
+    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return 'Az önce';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}dk`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}sa`;
+    const days = Math.floor(hours / 24);
+    return `${days}g`;
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.read && markAsRead) {
+      await markAsRead(notification.id);
+    }
+    const url = getNotificationUrl?.(notification);
+    if (url) {
+      setNotificationDropdownOpen(false);
+      router.push(url);
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -115,25 +168,107 @@ export default function Navbar() {
             {/* Desktop Nav */}
             <div className="hidden md:flex items-center space-x-1">
               {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`relative flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
-                    pathname === item.href
-                      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <span className="relative">
-                    {item.icon}
-                    {item.badge !== undefined && item.badge > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                        {item.badge > 9 ? '9+' : item.badge}
+                item.href === '/bildirimler' ? (
+                  // Notification item with dropdown
+                  <div key={item.href} className="relative" ref={notificationRef}>
+                    <button
+                      onClick={() => {
+                        setNotificationDropdownOpen(!notificationDropdownOpen);
+                        setMenuOpen(false);
+                      }}
+                      className={`relative flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
+                        pathname === item.href || notificationDropdownOpen
+                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      <span className="relative">
+                        {item.icon}
+                        {item.badge !== undefined && item.badge > 0 && (
+                          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                            {item.badge > 9 ? '9+' : item.badge}
+                          </span>
+                        )}
                       </span>
+                      <span>{item.label}</span>
+                    </button>
+
+                    {/* Notification Dropdown */}
+                    {notificationDropdownOpen && (
+                      <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden animate-scaleIn origin-top-right z-50">
+                        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                          <h3 className="font-semibold text-gray-900 dark:text-white">Bildirimler</h3>
+                          {unreadNotifications > 0 && (
+                            <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 px-2 py-0.5 rounded-full">
+                              {unreadNotifications} yeni
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="max-h-80 overflow-y-auto">
+                          {notifications.length === 0 ? (
+                            <div className="p-6 text-center text-gray-500">
+                              <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                              </svg>
+                              Bildirim yok
+                            </div>
+                          ) : (
+                            notifications.slice(0, 5).map((notification) => (
+                              <div
+                                key={notification.id}
+                                onClick={() => handleNotificationClick(notification)}
+                                className={`px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
+                                  !notification.read ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''
+                                }`}
+                              >
+                                <span className="text-lg flex-shrink-0">{getNotificationIcon(notification.type)}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-gray-800 dark:text-gray-200 line-clamp-2">
+                                    {getNotificationText(notification)}
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-0.5">{timeAgo(notification.created_at)}</p>
+                                </div>
+                                {!notification.read && (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0 mt-1.5" />
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        <Link
+                          href="/bildirimler"
+                          onClick={() => setNotificationDropdownOpen(false)}
+                          className="block px-4 py-3 text-center text-sm font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 border-t border-gray-100 dark:border-gray-700"
+                        >
+                          Tüm Bildirimleri Gör
+                        </Link>
+                      </div>
                     )}
-                  </span>
-                  <span>{item.label}</span>
-                </Link>
+                  </div>
+                ) : (
+                  // Regular nav item
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`relative flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
+                      pathname === item.href
+                        ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    <span className="relative">
+                      {item.icon}
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                          {item.badge > 9 ? '9+' : item.badge}
+                        </span>
+                      )}
+                    </span>
+                    <span>{item.label}</span>
+                  </Link>
+                )
               ))}
             </div>
 

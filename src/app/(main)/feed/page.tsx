@@ -11,6 +11,7 @@ import { PollCard } from '@/components/PollCard';
 import { PostSkeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { SuggestedUsersSlider } from '@/components/SuggestedUsersSlider';
 import type { Post, Profile, Event, Announcement, Poll } from '@/types';
 
 export default function FeedPage() {
@@ -70,13 +71,13 @@ export default function FeedPage() {
         .select('following_id')
         .eq('follower_id', userId),
 
-      // Suggested users
+      // Suggested users (daha fazla çek slider için)
       supabase
         .from('profiles')
         .select('*')
         .neq('id', userId)
         .eq('is_approved', true)
-        .limit(10),
+        .limit(15),
 
       // Upcoming events
       supabase
@@ -116,7 +117,7 @@ export default function FeedPage() {
 
     if (allUsers) {
       const notFollowing = allUsers.filter((u) => !followIds.includes(u.id));
-      setSuggestedUsers(notFollowing.slice(0, 5));
+      setSuggestedUsers(notFollowing.slice(0, 10)); // Slider için 10 kişi
     }
 
     if (events) {
@@ -215,6 +216,22 @@ export default function FeedPage() {
         <div className="flex-1 min-w-0 max-w-2xl">
           {/* Stories */}
           <StoryBar currentUserId={profile?.id} />
+
+          {/* Suggested Users Slider - Only on mobile/tablet */}
+          {suggestedUsers.length > 0 && (
+            <div className="xl:hidden mb-4">
+              <SuggestedUsersSlider
+                users={suggestedUsers}
+                currentUserId={profile?.id}
+                onFollowChange={(userId, isFollowing) => {
+                  if (isFollowing) {
+                    setFollowingIds([...followingIds, userId]);
+                    setSuggestedUsers(suggestedUsers.filter((u) => u.id !== userId));
+                  }
+                }}
+              />
+            </div>
+          )}
 
           {/* Pinned Announcements */}
           {announcements.filter(a => a.is_pinned).length > 0 && (

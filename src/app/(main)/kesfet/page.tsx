@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { Lightbox } from '@/components/ui/Lightbox';
 import PostCard from '@/components/PostCard';
+import { SuggestedUsersSlider } from '@/components/SuggestedUsersSlider';
 import type { Profile, Post } from '@/types';
 
 interface UserWithStats extends Profile {
@@ -173,39 +174,19 @@ export default function ExplorePage() {
         </Link>
       </div>
 
-      {/* Suggested Users */}
+      {/* Suggested Users Slider */}
       {suggestedUsers.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Önerilen Kullanıcılar
-          </h2>
-          <div className="space-y-3">
-            {suggestedUsers.map((user) => (
-              <div key={user.id} className="flex items-center gap-3">
-                <Link href={`/profil/${user.username}`}>
-                  <Avatar src={user.avatar_url} alt={user.full_name} size="md" />
-                </Link>
-                <div className="flex-1 min-w-0">
-                  <Link href={`/profil/${user.username}`} className="hover:underline">
-                    <p className="font-semibold text-gray-900 dark:text-white truncate">
-                      {user.full_name}
-                    </p>
-                  </Link>
-                  <p className="text-sm text-gray-500">
-                    {user._count?.followers || 0} takipçi · {user._count?.posts || 0} gönderi
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant={followingIds.includes(user.id) ? 'secondary' : 'primary'}
-                  onClick={() => handleFollow(user.id)}
-                >
-                  {followingIds.includes(user.id) ? 'Takipte' : 'Takip Et'}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
+        <SuggestedUsersSlider
+          users={suggestedUsers}
+          currentUserId={currentUser?.id}
+          onFollowChange={(userId, isFollowing) => {
+            if (isFollowing) {
+              setFollowingIds([...followingIds, userId]);
+            } else {
+              setFollowingIds(followingIds.filter((id) => id !== userId));
+            }
+          }}
+        />
       )}
 
       {/* Recent Media Grid */}
