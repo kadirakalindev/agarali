@@ -316,8 +316,7 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Spacer for bottom nav */}
-      <div className="md:hidden h-20" />
+      {/* Spacer for bottom nav - removed, layout handles padding */}
     </>
   );
 }
