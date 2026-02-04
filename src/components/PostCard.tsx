@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Avatar } from './ui/Avatar';
 import { Button, IconButton } from './ui/Button';
 import { ConfirmModal } from './ui/Modal';
+import { sendLikeNotification, sendCommentNotification } from '@/lib/send-push-notification';
 import type { Post, Profile, Comment } from '@/types';
 
 interface CommentWithReplies extends Comment {
@@ -187,6 +188,20 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
         .from('likes')
         .insert({ post_id: post.id, user_id: currentUserId });
       setLikeCount((prev) => prev + 1);
+
+      // Send push notification to post owner (if not liking own post)
+      if (post.user_id !== currentUserId) {
+        // Get current user's name for notification
+        const { data: currentProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', currentUserId)
+          .single();
+
+        if (currentProfile) {
+          sendLikeNotification(post.user_id, currentProfile.full_name, post.id);
+        }
+      }
     }
     setLiked(!liked);
   };
@@ -230,6 +245,18 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
       .single();
 
     if (!error && data) {
+      // Get current user's name for notifications
+      const { data: currentProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', currentUserId)
+        .single();
+
+      // Send push notification to post owner (if not commenting on own post)
+      if (post.user_id !== currentUserId && currentProfile) {
+        sendCommentNotification(post.user_id, currentProfile.full_name, post.id, comment);
+      }
+
       // Extract mentions and create notifications
       const mentions = comment.match(/@(\w+)/g);
       if (mentions) {

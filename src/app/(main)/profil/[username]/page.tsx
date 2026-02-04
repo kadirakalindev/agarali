@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ProfileSkeleton, PostSkeleton } from '@/components/ui/Skeleton';
 import PostCard from '@/components/PostCard';
+import { sendFollowNotification } from '@/lib/send-push-notification';
 import type { Profile, Post } from '@/types';
 
 export default function ProfilePage() {
@@ -124,6 +125,9 @@ export default function ProfilePage() {
           user_username: currentUser.username,
         },
       });
+
+      // Send push notification
+      sendFollowNotification(profile.id, currentUser.full_name, currentUser.username);
     }
     setIsFollowing(!isFollowing);
     setFollowLoading(false);
