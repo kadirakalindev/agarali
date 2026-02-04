@@ -152,7 +152,10 @@ export default function Navbar() {
               {/* Profile Dropdown */}
               <div className="relative" ref={menuRef}>
                 <button
-                  onClick={() => setMenuOpen(!menuOpen)}
+                  onClick={() => {
+                    setMenuOpen(!menuOpen);
+                    setMobileMenuOpen(false); // Mobil menüyü kapat
+                  }}
                   className="flex items-center space-x-2 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   <Avatar
@@ -232,7 +235,10 @@ export default function Navbar() {
               {/* Mobile Menu Button */}
               <button
                 className="md:hidden p-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                onClick={() => {
+                  setMobileMenuOpen(!mobileMenuOpen);
+                  setMenuOpen(false); // Profil menüsünü kapat
+                }}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   {mobileMenuOpen ? (

@@ -462,31 +462,42 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
 
         {/* Media */}
         {post.post_media && post.post_media.length > 0 && (
-          <div className={`grid gap-0.5 ${
-            post.post_media.length === 1 ? '' :
-            post.post_media.length === 2 ? 'grid-cols-2' :
-            post.post_media.length === 3 ? 'grid-cols-2' :
-            'grid-cols-2'
+          <div className={`${
+            post.post_media.length === 1
+              ? 'flex justify-center bg-gray-100 dark:bg-gray-900'
+              : `grid gap-0.5 ${
+                  post.post_media.length === 2 ? 'grid-cols-2' :
+                  post.post_media.length === 3 ? 'grid-cols-2' :
+                  'grid-cols-2'
+                }`
           }`}>
             {post.post_media.map((media, index) => (
               <div
                 key={media.id}
                 className={`relative ${
-                  post.post_media!.length === 3 && index === 0 ? 'row-span-2' : ''
+                  post.post_media!.length === 1
+                    ? 'max-w-full'
+                    : post.post_media!.length === 3 && index === 0
+                      ? 'row-span-2'
+                      : ''
                 }`}
               >
                 {media.file_type === 'image' ? (
                   <img
                     src={media.file_url}
                     alt=""
-                    className="w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity"
-                    style={{ maxHeight: post.post_media!.length === 1 ? '500px' : '300px' }}
+                    className={`cursor-pointer hover:opacity-95 transition-opacity ${
+                      post.post_media!.length === 1
+                        ? 'max-h-[600px] w-auto max-w-full object-contain'
+                        : 'w-full h-full object-cover'
+                    }`}
+                    style={post.post_media!.length > 1 ? { maxHeight: '300px' } : undefined}
                   />
                 ) : (
                   <video
                     src={media.file_url}
                     controls
-                    className="w-full max-h-96"
+                    className="w-full max-h-[500px]"
                   />
                 )}
               </div>

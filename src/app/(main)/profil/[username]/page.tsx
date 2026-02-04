@@ -6,11 +6,18 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { ProfileSkeleton, PostSkeleton } from '@/components/ui/Skeleton';
 import { Lightbox } from '@/components/ui/Lightbox';
+import { Spinner } from '@/components/ui/Spinner';
 import PostCard from '@/components/PostCard';
 import { sendFollowNotification } from '@/lib/send-push-notification';
 import type { Profile, Post } from '@/types';
+
+interface FollowUser {
+  id: string;
+  profiles: Profile;
+}
 
 export default function ProfilePage() {
   const params = useParams();
@@ -27,6 +34,12 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'posts' | 'media'>('posts');
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [showFollowingModal, setShowFollowingModal] = useState(false);
+  const [followers, setFollowers] = useState<FollowUser[]>([]);
+  const [following, setFollowing] = useState<FollowUser[]>([]);
+  const [loadingFollowers, setLoadingFollowers] = useState(false);
+  const [loadingFollowing, setLoadingFollowing] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -138,6 +151,38 @@ export default function ProfilePage() {
 
   const handlePostDeleted = (postId: string) => {
     setPosts(posts.filter((p) => p.id !== postId));
+  };
+
+  const fetchFollowers = async () => {
+    if (!profile) return;
+    setLoadingFollowers(true);
+    const { data } = await supabase
+      .from('follows')
+      .select('id, profiles!follows_follower_id_fkey(*)')
+      .eq('following_id', profile.id);
+    setFollowers((data as unknown as FollowUser[]) || []);
+    setLoadingFollowers(false);
+  };
+
+  const fetchFollowing = async () => {
+    if (!profile) return;
+    setLoadingFollowing(true);
+    const { data } = await supabase
+      .from('follows')
+      .select('id, profiles!follows_following_id_fkey(*)')
+      .eq('follower_id', profile.id);
+    setFollowing((data as unknown as FollowUser[]) || []);
+    setLoadingFollowing(false);
+  };
+
+  const openFollowersModal = () => {
+    setShowFollowersModal(true);
+    fetchFollowers();
+  };
+
+  const openFollowingModal = () => {
+    setShowFollowingModal(true);
+    fetchFollowing();
   };
 
   const isOwnProfile = currentUser?.id === profile?.id;
@@ -255,11 +300,17 @@ export default function ProfilePage() {
               <span className="block font-bold text-xl text-gray-900 dark:text-white">{posts.length}</span>
               <span className="text-sm text-gray-500">gönderi</span>
             </div>
-            <button className="text-center hover:opacity-80 transition-opacity">
+            <button
+              onClick={openFollowersModal}
+              className="text-center hover:bg-gray-100 dark:hover:bg-gray-700 px-3 py-2 rounded-xl transition-colors"
+            >
               <span className="block font-bold text-xl text-gray-900 dark:text-white">{followersCount}</span>
               <span className="text-sm text-gray-500">takipçi</span>
             </button>
-            <button className="text-center hover:opacity-80 transition-opacity">
+            <button
+              onClick={openFollowingModal}
+              className="text-center hover:bg-gray-100 dark:hover:bg-gray-700 px-3 py-2 rounded-xl transition-colors"
+            >
               <span className="block font-bold text-xl text-gray-900 dark:text-white">{followingCount}</span>
               <span className="text-sm text-gray-500">takip</span>
             </button>
@@ -409,6 +460,106 @@ export default function ProfilePage() {
           )}
         </div>
       )}
+
+      {/* Followers Modal */}
+      <Modal
+        isOpen={showFollowersModal}
+        onClose={() => setShowFollowersModal(false)}
+        title="Takipçiler"
+      >
+        <div className="p-4 max-h-[60vh] overflow-y-auto">
+          {loadingFollowers ? (
+            <div className="flex justify-center py-8">
+              <Spinner size="lg" />
+            </div>
+          ) : followers.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Henüz takipçi yok
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {followers.map((follow) => (
+                <Link
+                  key={follow.id}
+                  href={`/profil/${follow.profiles.username}`}
+                  onClick={() => setShowFollowersModal(false)}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Avatar
+                    src={follow.profiles.avatar_url}
+                    alt={follow.profiles.full_name}
+                    size="md"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white truncate">
+                      {follow.profiles.full_name}
+                      {follow.profiles.nickname && (
+                        <span className="ml-2 px-1.5 py-0.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded">
+                          {follow.profiles.nickname}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-sm text-gray-500 truncate">@{follow.profiles.username}</p>
+                  </div>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Following Modal */}
+      <Modal
+        isOpen={showFollowingModal}
+        onClose={() => setShowFollowingModal(false)}
+        title="Takip Edilenler"
+      >
+        <div className="p-4 max-h-[60vh] overflow-y-auto">
+          {loadingFollowing ? (
+            <div className="flex justify-center py-8">
+              <Spinner size="lg" />
+            </div>
+          ) : following.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Henüz kimseyi takip etmiyor
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {following.map((follow) => (
+                <Link
+                  key={follow.id}
+                  href={`/profil/${follow.profiles.username}`}
+                  onClick={() => setShowFollowingModal(false)}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Avatar
+                    src={follow.profiles.avatar_url}
+                    alt={follow.profiles.full_name}
+                    size="md"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white truncate">
+                      {follow.profiles.full_name}
+                      {follow.profiles.nickname && (
+                        <span className="ml-2 px-1.5 py-0.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded">
+                          {follow.profiles.nickname}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-sm text-gray-500 truncate">@{follow.profiles.username}</p>
+                  </div>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
