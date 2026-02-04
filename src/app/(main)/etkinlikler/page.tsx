@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -17,7 +17,9 @@ export default function EventsPage() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
-  const supabase = createClient();
+
+  // Supabase client'ı memoize et
+  const supabase = useMemo(() => createClient(), []);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -26,6 +28,29 @@ export default function EventsPage() {
   const [eventDate, setEventDate] = useState('');
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
+
+  const fetchEvents = useCallback(async () => {
+    const now = new Date().toISOString();
+
+    // Paralel fetch
+    const [{ data: upcoming }, { data: past }] = await Promise.all([
+      supabase
+        .from('events')
+        .select('*, profiles(*), event_participants(*, profiles(*))')
+        .gte('event_date', now)
+        .order('event_date', { ascending: true }),
+      supabase
+        .from('events')
+        .select('*, profiles(*), event_participants(*, profiles(*))')
+        .lt('event_date', now)
+        .order('event_date', { ascending: false })
+        .limit(10),
+    ]);
+
+    setEvents(upcoming || []);
+    setPastEvents(past || []);
+    setLoading(false);
+  }, [supabase]);
 
   useEffect(() => {
     async function init() {
@@ -41,30 +66,7 @@ export default function EventsPage() {
       fetchEvents();
     }
     init();
-  }, [supabase]);
-
-  const fetchEvents = async () => {
-    const now = new Date().toISOString();
-
-    // Upcoming events
-    const { data: upcoming } = await supabase
-      .from('events')
-      .select('*, profiles(*), event_participants(*, profiles(*))')
-      .gte('event_date', now)
-      .order('event_date', { ascending: true });
-
-    // Past events
-    const { data: past } = await supabase
-      .from('events')
-      .select('*, profiles(*), event_participants(*, profiles(*))')
-      .lt('event_date', now)
-      .order('event_date', { ascending: false })
-      .limit(10);
-
-    setEvents(upcoming || []);
-    setPastEvents(past || []);
-    setLoading(false);
-  };
+  }, [supabase, fetchEvents]);
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();

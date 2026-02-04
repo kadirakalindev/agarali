@@ -81,8 +81,8 @@ export default function ProfilePage() {
           .eq('follower_id', profileData.id);
         setFollowingCount(following || 0);
 
-        // Check if following
-        if (user) {
+        // Check if following (skip if own profile)
+        if (user && user.id !== profileData.id) {
           const { data: followData } = await supabase
             .from('follows')
             .select('id')
