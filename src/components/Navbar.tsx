@@ -8,7 +8,6 @@ import { Avatar } from './ui/Avatar';
 import { useSiteSettings } from '@/lib/contexts/SiteSettingsContext';
 import { useNotificationsSafe } from '@/lib/contexts/NotificationContext';
 import type { Profile, Notification } from '@/types';
-import { PWAInstallButton } from './PWAInstallPrompt';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -275,9 +274,6 @@ export default function Navbar() {
 
             {/* Profile Menu */}
             <div className="flex items-center gap-2">
-              {/* PWA Install Button */}
-              <PWAInstallButton />
-
               {/* Search Button */}
               <Link
                 href="/ara"

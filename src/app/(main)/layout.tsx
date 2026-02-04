@@ -1,6 +1,7 @@
 import Navbar from '@/components/Navbar';
 import { NotificationWrapper } from '@/components/NotificationWrapper';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
+import { NotificationPermissionPrompt } from '@/components/NotificationPermissionPrompt';
 
 export default function MainLayout({
   children,
@@ -15,6 +16,7 @@ export default function MainLayout({
           {children}
         </main>
         <PWAInstallPrompt variant="floating" />
+        <NotificationPermissionPrompt />
       </div>
     </NotificationWrapper>
   );
