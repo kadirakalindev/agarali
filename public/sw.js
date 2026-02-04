@@ -21,8 +21,8 @@ self.addEventListener('push', (event) => {
   let data = {
     title: 'Agara Köyü',
     body: 'Yeni bir bildiriminiz var!',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
+    icon: '/icons/android/android-launchericon-192-192.png',
+    badge: '/icons/android/android-launchericon-72-72.png',
     url: '/bildirimler',
   };
 
@@ -36,8 +36,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: data.icon || '/icons/icon-192x192.png',
-    badge: data.badge || '/icons/icon-72x72.png',
+    icon: data.icon || '/icons/android/android-launchericon-192-192.png',
+    badge: data.badge || '/icons/android/android-launchericon-72-72.png',
     vibrate: [100, 50, 100],
     data: {
       url: data.url || '/bildirimler',

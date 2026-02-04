@@ -1,5 +1,6 @@
 import Navbar from '@/components/Navbar';
 import { NotificationWrapper } from '@/components/NotificationWrapper';
+import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 
 export default function MainLayout({
   children,
@@ -13,6 +14,7 @@ export default function MainLayout({
         <main className="max-w-6xl mx-auto px-4 pt-3 pb-24 md:pt-6 md:pb-6">
           {children}
         </main>
+        <PWAInstallPrompt variant="floating" />
       </div>
     </NotificationWrapper>
   );
