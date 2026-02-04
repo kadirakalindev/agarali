@@ -248,14 +248,44 @@ CREATE TABLE IF NOT EXISTS poll_votes (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tek seçimli anketlerde her kullanıcı sadece bir oy kullanabilir
-CREATE UNIQUE INDEX IF NOT EXISTS idx_poll_votes_single_choice
-ON poll_votes(poll_id, user_id)
-WHERE EXISTS (SELECT 1 FROM polls WHERE polls.id = poll_id AND polls.poll_type = 'single');
-
--- Çok seçimli anketlerde aynı seçeneğe tekrar oy verilemez
+-- Aynı seçeneğe tekrar oy verilemez (hem tek hem çok seçimli için geçerli)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_poll_votes_option_user
 ON poll_votes(poll_option_id, user_id);
+
+-- Tek seçimli anketlerde kullanıcının sadece bir oy kullanabilmesi için trigger
+CREATE OR REPLACE FUNCTION check_single_choice_poll()
+RETURNS TRIGGER AS $$
+DECLARE
+    poll_type_value TEXT;
+    existing_vote_count INTEGER;
+BEGIN
+    -- Anketin türünü al
+    SELECT poll_type INTO poll_type_value
+    FROM polls
+    WHERE id = NEW.poll_id;
+
+    -- Eğer tek seçimli anketse
+    IF poll_type_value = 'single' THEN
+        -- Kullanıcının bu ankette mevcut oyu var mı kontrol et
+        SELECT COUNT(*) INTO existing_vote_count
+        FROM poll_votes
+        WHERE poll_id = NEW.poll_id AND user_id = NEW.user_id;
+
+        IF existing_vote_count > 0 THEN
+            RAISE EXCEPTION 'Tek seçimli anketlerde sadece bir oy kullanabilirsiniz';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger'ı oluştur (eğer yoksa)
+DROP TRIGGER IF EXISTS enforce_single_choice ON poll_votes;
+CREATE TRIGGER enforce_single_choice
+    BEFORE INSERT ON poll_votes
+    FOR EACH ROW
+    EXECUTE FUNCTION check_single_choice_poll();
 
 -- Anket RLS politikaları
 ALTER TABLE polls ENABLE ROW LEVEL SECURITY;
