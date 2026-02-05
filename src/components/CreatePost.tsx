@@ -262,31 +262,54 @@ export default function CreatePost({ profile, onPostCreated }: CreatePostProps) 
             onDrop={handleDrop}
           >
             {previews.length > 0 ? (
-              <div className={`grid gap-2 ${
+              <div className={`grid gap-3 ${
                 previews.length === 1 ? 'grid-cols-1' :
                 previews.length === 2 ? 'grid-cols-2' :
+                previews.length === 3 ? 'grid-cols-3' :
                 'grid-cols-2'
               }`}>
                 {previews.map((preview, index) => (
-                  <div key={index} className="relative group rounded-xl overflow-hidden">
+                  <div
+                    key={index}
+                    className={`relative rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 ${
+                      previews.length === 1 ? 'max-h-[300px]' :
+                      previews.length === 3 && index === 0 ? 'row-span-2' : ''
+                    }`}
+                  >
                     {files[index]?.type.startsWith('video/') ? (
-                      <video src={preview} className="w-full h-40 object-cover" />
+                      <video
+                        src={preview}
+                        className={`w-full object-cover ${
+                          previews.length === 1 ? 'max-h-[300px]' :
+                          previews.length === 3 && index === 0 ? 'h-full' : 'h-36'
+                        }`}
+                      />
                     ) : (
-                      <img src={preview} alt="" className="w-full h-40 object-cover" />
+                      <img
+                        src={preview}
+                        alt=""
+                        className={`w-full object-cover ${
+                          previews.length === 1 ? 'max-h-[300px]' :
+                          previews.length === 3 && index === 0 ? 'h-full' : 'h-36'
+                        }`}
+                      />
                     )}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button
-                        type="button"
-                        onClick={() => removeFile(index)}
-                        className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
+                    {/* Remove button - always visible */}
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                      title="Kaldır"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                     {files[index]?.type.startsWith('video/') && (
-                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded-full">
+                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded-full flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                        </svg>
                         Video
                       </div>
                     )}

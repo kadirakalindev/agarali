@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Avatar } from './ui/Avatar';
 import { Button, IconButton } from './ui/Button';
 import { ConfirmModal } from './ui/Modal';
+import { Lightbox } from './ui/Lightbox';
 import { sendLikeNotification, sendCommentNotification } from '@/lib/send-push-notification';
 import type { Post, Profile, Comment } from '@/types';
 
@@ -136,6 +137,8 @@ export default function PostCard({ post, currentUserId, currentUserProfile, onDe
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [mentionResults, setMentionResults] = useState<MentionUser[]>([]);
   const [showMentions, setShowMentions] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const commentInputRef = useRef<HTMLInputElement>(null);
   const mentionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const supabase = useMemo(() => createClient(), []);
@@ -496,48 +499,84 @@ export default function PostCard({ post, currentUserId, currentUserProfile, onDe
 
         {/* Media */}
         {post.post_media && post.post_media.length > 0 && (
-          <div className={`${
-            post.post_media.length === 1
-              ? 'flex justify-center bg-gray-100 dark:bg-gray-900'
-              : `grid gap-0.5 ${
-                  post.post_media.length === 2 ? 'grid-cols-2' :
-                  post.post_media.length === 3 ? 'grid-cols-2' :
-                  'grid-cols-2'
-                }`
-          }`}>
-            {post.post_media.map((media, index) => (
-              <div
-                key={media.id}
-                className={`relative ${
-                  post.post_media!.length === 1
-                    ? 'max-w-full'
-                    : post.post_media!.length === 3 && index === 0
-                      ? 'row-span-2'
-                      : ''
-                }`}
-              >
-                {media.file_type === 'image' ? (
-                  <img
-                    src={media.file_url}
-                    alt=""
-                    className={`cursor-pointer hover:opacity-95 transition-opacity ${
-                      post.post_media!.length === 1
-                        ? 'max-h-[600px] w-auto max-w-full object-contain'
-                        : 'w-full h-full object-cover'
-                    }`}
-                    style={post.post_media!.length > 1 ? { maxHeight: '300px' } : undefined}
-                  />
-                ) : (
-                  <video
-                    src={media.file_url}
-                    controls
-                    className="w-full max-h-[500px]"
-                  />
-                )}
-              </div>
-            ))}
+          <div className={`
+            ${post.post_media.length === 1 ? 'flex justify-center bg-gray-100 dark:bg-gray-900' : ''}
+            ${post.post_media.length === 2 ? 'grid grid-cols-2 gap-0.5' : ''}
+            ${post.post_media.length === 3 ? 'grid grid-cols-2 gap-0.5' : ''}
+            ${post.post_media.length === 4 ? 'grid grid-cols-2 gap-0.5' : ''}
+          `}>
+            {post.post_media.map((media, index) => {
+              const mediaCount = post.post_media!.length;
+
+              // Responsive height calculations
+              const getImageClass = () => {
+                if (mediaCount === 1) {
+                  return 'max-h-[500px] w-auto max-w-full object-contain cursor-pointer hover:opacity-95 transition-opacity';
+                }
+                if (mediaCount === 2) {
+                  return 'w-full h-[280px] object-cover cursor-pointer hover:opacity-95 transition-opacity';
+                }
+                if (mediaCount === 3) {
+                  if (index === 0) {
+                    return 'w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity';
+                  }
+                  return 'w-full h-[140px] object-cover cursor-pointer hover:opacity-95 transition-opacity';
+                }
+                // 4 images
+                return 'w-full h-[180px] object-cover cursor-pointer hover:opacity-95 transition-opacity';
+              };
+
+              const getContainerClass = () => {
+                if (mediaCount === 3 && index === 0) {
+                  return 'relative row-span-2 h-[280px]';
+                }
+                return 'relative overflow-hidden';
+              };
+
+              return (
+                <div key={media.id} className={getContainerClass()}>
+                  {media.file_type === 'image' ? (
+                    <img
+                      src={media.file_url}
+                      alt=""
+                      className={getImageClass()}
+                      onClick={() => {
+                        setLightboxIndex(index);
+                        setLightboxOpen(true);
+                      }}
+                    />
+                  ) : (
+                    <div className="relative">
+                      <video
+                        src={media.file_url}
+                        className="w-full h-[280px] object-cover cursor-pointer"
+                        onClick={() => {
+                          setLightboxIndex(index);
+                          setLightboxOpen(true);
+                        }}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
+                          <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
+
+        {/* Lightbox */}
+        <Lightbox
+          images={post.post_media?.map(m => ({ url: m.file_url, type: m.file_type as 'image' | 'video' })) || []}
+          initialIndex={lightboxIndex}
+          isOpen={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+        />
 
         {/* Actions */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-700">
